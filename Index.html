@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>ZONE CONTROL | S.T.A.L.K.E.R. Shadow of Chernobyl</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'mono': ['Share Tech Mono', 'monospace'],
+                        'inter': ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        zone: '#0a0c0f',
+                        zoneCard: '#111315',
+                        zoneBorder: '#2a2f2a',
+                        zoneAccent: '#8b5a2b',
+                        zoneDanger: '#9e2d2f',
+                        zoneRadio: '#e6b422',
+                        lightBg: '#eef2e6',
+                        lightCard: '#ffffff',
+                        lightBorder: '#d4d9c9',
+                    },
+                }
+            },
+        }
+    </script>
+    <style>
+        * {
+            cursor: none;
+        }
+        body {
+            transition: background-color 0.3s ease, color 0.2s ease;
+        }
+        .custom-cursor {
+            position: fixed;
+            width: 28px;
+            height: 28px;
+            pointer-events: none;
+            z-index: 99999;
+            transform: translate(-50%, -50%);
+            transition: width 0.1s, height 0.1s;
+            filter: drop-shadow(0 0 2px #8b5a2b);
+        }
+        .custom-cursor svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 3px rgba(139, 90, 43, 0.7));
+        }
+        .custom-cursor.hover-effect {
+            width: 38px;
+            height: 38px;
+            filter: drop-shadow(0 0 6px #e6b422);
+        }
+        .custom-cursor.click-effect {
+            width: 24px;
+            height: 24px;
+            filter: drop-shadow(0 0 8px #ff5500);
+        }
+        .noise-bg {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)' opacity='0.1'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            pointer-events: none;
+        }
+        .location-card {
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .location-hover-stats {
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            pointer-events: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.95);
+            backdrop-filter: blur(8px);
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            z-index: 20;
+            border: 1px solid #8b5a2b;
+        }
+        .location-card:hover .location-hover-stats {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            background: #1a1e1a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #8b5a2b;
+            border-radius: 4px;
+        }
+        .crt-effect {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0, 255, 0, 0.02) 0px, rgba(0, 255, 0, 0.02) 2px, transparent 2px, transparent 6px);
+            pointer-events: none;
+            z-index: 999;
+        }
+        button, a, .location-card, .artifact-card, .faction-card {
+            cursor: none;
+        }
+        .faction-card, .artifact-card {
+            transition: all 0.25s ease;
+        }
+        .faction-card:hover, .artifact-card:hover {
+            transform: translateY(-3px);
+        }
+        .stat-number {
+            font-family: 'Share Tech Mono', monospace;
+            text-shadow: 0 0 5px rgba(139, 90, 43, 0.5);
+        }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useCallback } = React;
+
+    const locationsData = {
+        "Кордон": { danger: [20, 40], mutants: [5, 20], stalkers: [45, 70], artifact: [5, 18] },
+        "Агропром": { danger: [55, 82], mutants: [35, 65], stalkers: [15, 38], artifact: [12, 32] },
+        "Тёмная долина": { danger: [60, 85], mutants: [45, 78], stalkers: [8, 25], artifact: [18, 42] },
+        "Янтарь": { danger: [70, 94], mutants: [20, 48], stalkers: [5, 18], artifact: [28, 52] },
+        "Бар": { danger: [18, 38], mutants: [8, 24], stalkers: [55, 82], artifact: [4, 14] },
+        "Припять": { danger: [85, 98], mutants: [60, 92], stalkers: [3, 15], artifact: [42, 72] },
+        "Радар": { danger: [65, 88], mutants: [40, 72], stalkers: [6, 20], artifact: [22, 48] },
+        "Свалка": { danger: [45, 68], mutants: [30, 58], stalkers: [18, 42], artifact: [8, 28] }
+    };
+
+    const getRandomPercent = (range) => Math.floor(Math.random() * (range[1] - range[0] + 1) + range[0]);
+
+    const LocationHoverStats = ({ location }) => {
+        const [stats, setStats] = useState({ danger: 0, mutants: 0, stalkers: 0, artifact: 0 });
+        
+        const refreshStats = useCallback(() => {
+            const data = locationsData[location];
+            if (data) {
+                setStats({
+                    danger: getRandomPercent(data.danger),
+                    mutants: getRandomPercent(data.mutants),
+                    stalkers: getRandomPercent(data.stalkers),
+                    artifact: getRandomPercent(data.artifact)
+                });
+            }
+        }, [location]);
+        
+        useEffect(() => {
+            refreshStats();
+            const interval = setInterval(refreshStats, 4500);
+            return () => clearInterval(interval);
+        }, [refreshStats]);
+        
+        return (
+            <div className="location-hover-stats">
+                <div className="space-y-1.5 text-[10px] font-mono">
+                    <div className="flex justify-between border-b border-stone-700 pb-1">
+                        <span className="text-red-400">☢ ОПАСНОСТЬ:</span>
+                        <span className="font-bold text-zoneRadio">{stats.danger}%</span>
+                    </div>
+                    <div className="flex justify-between border-b border-stone-700 pb-1">
+                        <span className="text-orange-400">👾 МУТАНТЫ:</span>
+                        <span className="font-bold text-orange-300">{stats.mutants}%</span>
+                    </div>
+                    <div className="flex justify-between border-b border-stone-700 pb-1">
+                        <span className="text-emerald-400">🕊 СТАЛКЕРЫ:</span>
+                        <span className="font-bold text-emerald-300">{stats.stalkers}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-amber-400">✨ АРТЕФАКТ:</span>
+                        <span className="font-bold text-amber-300">{stats.artifact}%</span>
+                    </div>
+                    <div className="text-[7px] text-center text-stone-500 mt-2 animate-pulse">данные сканера • обновление 4.5с</div>
+                </div>
+            </div>
+        );
+    };
+
+    const LocationCard = ({ name, isDark }) => (
+        <div className="location-card relative group cursor-pointer">
+            <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder/50' : 'bg-lightCard border-lightBorder shadow-sm'} p-2.5 text-center border rounded-md transition-all hover:border-zoneAccent/70`}>
+                <div className="text-xs font-mono font-bold tracking-wide">{name}</div>
+                <div className="w-1.5 h-1.5 bg-red-600 rounded-full mx-auto mt-1.5 animate-pulse"></div>
+            </div>
+            <LocationHoverStats location={name} />
+        </div>
+    );
+
+    const ThemeToggle = ({ isDark, toggleTheme }) => (
+        <button onClick={toggleTheme} className={`p-2.5 rounded-lg transition-all ${isDark ? 'bg-zoneCard border-zoneBorder' : 'bg-lightCard border-lightBorder'} border shadow-md`}>
+            {isDark ? <i data-lucide="sun" className="w-5 h-5 text-amber-400"></i> : <i data-lucide="moon" className="w-5 h-5 text-stone-700"></i>}
+        </button>
+    );
+
+    const GeigerBeep = ({ isDark }) => {
+        const [active, setActive] = useState(false);
+        useEffect(() => {
+            const interval = setInterval(() => { setActive(true); setTimeout(() => setActive(false), 120); }, 2000 + Math.random() * 1000);
+            return () => clearInterval(interval);
+        }, []);
+        return (
+            <div className={`fixed bottom-5 left-5 z-50 flex items-center gap-2 backdrop-blur px-3 py-1.5 rounded-full border text-[10px] font-mono ${isDark ? 'bg-black/70 border-zoneAccent/40' : 'bg-white/80 border-zoneAccent/50'} ${active ? 'text-zoneRadio animate-pulse' : 'text-stone-500'}`}>
+                <i data-lucide="activity" className="w-3 h-3"></i>
+                <span>RADIATION: {active ? '▄▄ CRACKLE' : '── NORM'}</span>
+            </div>
+        );
+    };
+
+    const Sidebar = ({ activeTab, setActiveTab, isDark }) => {
+        const menuItems = [
+            { id: 'zone', label: 'КАРТА ЗОНЫ', icon: 'map', desc: 'локации' },
+            { id: 'squad', label: 'ГРУППИРОВКИ', icon: 'users', desc: 'фракции' },
+            { id: 'artifacts', label: 'АРТЕФАКТЫ', icon: 'gem', desc: 'реликвии' },
+            { id: 'emissions', label: 'ВЫБРОСЫ', icon: 'zap', desc: 'угрозы' },
+        ];
+        return (
+            <aside className={`fixed left-0 top-0 h-full w-72 ${isDark ? 'bg-zoneCard/95 border-zoneBorder/80' : 'bg-lightCard border-lightBorder shadow-xl'} backdrop-blur-sm border-r p-5 flex flex-col z-20`}>
+                <div className="flex items-center gap-3 mb-8 pb-4 border-b border-zoneAccent/40">
+                    <div className="relative"><div className="w-11 h-11 bg-gradient-to-br from-zoneAccent to-amber-800 rounded-sm flex items-center justify-center text-black font-black text-xl">☢</div><div className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full animate-pulse"></div></div>
+                    <div><span className={`text-base font-black tracking-widest font-mono ${isDark ? 'text-amber-600/90' : 'text-amber-700'}`}>ZONE CONTROL</span><p className="text-[9px] text-stone-500 font-mono">S.T.A.L.K.E.R. · SoC</p></div>
+                </div>
+                <nav className="flex-1 space-y-1.5">
+                    {menuItems.map(item => (
+                        <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-md transition-all text-left ${activeTab === item.id ? (isDark ? 'bg-zoneAccent/20 border-l-3 border-zoneAccent text-amber-300' : 'bg-amber-100 border-l-3 border-amber-600 text-amber-800') : (isDark ? 'hover:bg-stone-900/60 text-stone-400' : 'hover:bg-stone-100 text-stone-600')}`}>
+                            <i data-lucide={item.icon} className="w-4 h-4"></i><div><p className="text-xs font-bold tracking-wide">{item.label}</p><p className="text-[8px] opacity-60 font-mono">{item.desc}</p></div>
+                        </button>
+                    ))}
+                </nav>
+                <div className="mt-auto pt-5 border-t border-zoneBorder/50"><div className={`p-3 rounded-md ${isDark ? 'bg-black/50 border-zoneAccent/30' : 'bg-amber-50 border-amber-200'} border`}><p className="text-[9px] font-mono text-zoneAccent"><i data-lucide="skull" className="w-3 h-3 inline"></i> СТАТУС: ОПАСНО</p><p className="text-[11px] font-bold mt-1 font-mono">МЕТКА: Агропром</p><p className="text-[8px] text-stone-400">ПСИ-излучение: 37 мР/ч</p><div className="w-full bg-stone-800 h-1 mt-2 rounded"><div className="w-2/3 h-full bg-zoneAccent/80 rounded"></div></div></div></div>
+            </aside>
+        );
+    };
+
+    const ZoneDashboard = ({ isDark }) => {
+        const [stalkersOnline, setStalkersOnline] = useState(156);
+        const [serverLoad, setServerLoad] = useState(47);
+        useEffect(() => {
+            const interval = setInterval(() => { setStalkersOnline(130 + Math.floor(Math.random() * 70)); setServerLoad(35 + Math.floor(Math.random() * 50)); }, 6000);
+            return () => clearInterval(interval);
+        }, []);
+        const locations = ["Кордон", "Агропром", "Тёмная долина", "Янтарь", "Бар", "Припять", "Радар", "Свалка"];
+        return (
+            <main className={`ml-72 flex-1 p-6 md:p-8 ${isDark ? 'text-stone-200' : 'text-stone-800'}`}>
+                <div className="flex flex-wrap justify-between items-start mb-8 pb-4 border-b border-zoneBorder/50"><div><div className="flex items-center gap-2 text-zoneAccent font-mono text-[11px]"><i data-lucide="radio" className="w-3 h-3"></i> ЧАСТОТА: 142.8 FM · ЗОНА ОТЧУЖДЕНИЯ</div><h1 className="text-2xl md:text-3xl font-black tracking-tighter mt-1 font-mono">[СЕРВЕР: S.T.A.L.K.E.R. SoC]</h1><p className="text-stone-400 text-xs mt-2 flex gap-4"><span><i data-lucide="wifi" className="w-3 h-3 inline"></i> онлайн: {stalkersOnline}</span><span><i data-lucide="cpu" className="w-3 h-3 inline"></i> нагрузка: {serverLoad}%</span></p></div></div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {[{ title: "СТАЛКЕРЫ", value: stalkersOnline, sub: "активных отрядов: 12", icon: "users" },{ title: "АНОМАЛИИ", value: "43", sub: "активных зон", icon: "zap", danger: true },{ title: "АРТЕФАКТЫ", value: "28", sub: "за неделю: +7", icon: "gem" },{ title: "PSI-ФОН", value: "0.74", sub: "мЗв/ч", icon: "radiation", danger: true }].map((card, idx) => (
+                        <div key={idx} className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-md p-4 relative overflow-hidden`}><div className="flex justify-between items-start"><div><p className={`text-[9px] font-mono ${isDark ? 'text-zoneAccent' : 'text-amber-700'}`}>{card.title}</p><h3 className={`text-xl font-black font-mono mt-1 ${isDark ? 'text-amber-200/90' : 'text-stone-800'}`}>{card.value}</h3><p className="text-[9px] text-stone-400 mt-1">{card.sub}</p></div><i data-lucide={card.icon} className={`w-5 h-5 ${isDark ? 'text-zoneAccent/60' : 'text-amber-600'}`}></i></div>{card.danger && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-red-700/50 animate-pulse"></div>}</div>
+                    ))}
+                </div>
+                <div className={`bg-gradient-to-r from-red-950/50 to-transparent p-4 rounded-md border-l-4 border-red-600 mb-8 ${isDark ? 'bg-zoneCard/60' : 'bg-red-50'}`}><div className="flex flex-wrap justify-between items-center gap-3"><div className="flex items-center gap-3"><i data-lucide="radiation" className="w-6 h-6 text-red-500 animate-pulse"></i><div><h3 className="font-mono font-bold text-red-400 text-sm">⚠️ АКТИВНОСТЬ ВЫБРОСА</h3><p className="text-xs">Вероятность за 6ч: <span className="text-zoneRadio font-bold">78%</span></p></div></div><div className="w-32 bg-stone-800 h-1.5 rounded-full"><div className="bg-red-600 h-full rounded-full w-3/4"></div></div><p className="text-[10px] font-mono text-amber-500">УКРОЙСЯ В УБЕЖИЩЕ</p></div></div>
+                <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder'} border rounded-md p-5 mb-8`}><h3 className="font-mono font-bold text-zoneAccent flex gap-2 text-sm mb-4"><i data-lucide="radar" className="w-4 h-4"></i> КАРТА АНОМАЛИЙ (наведи для данных)</h3><div className="grid grid-cols-2 sm:grid-cols-4 gap-3">{locations.map(loc => <LocationCard key={loc} name={loc} isDark={isDark} />)}</div><p className="text-[9px] text-stone-500 mt-3 font-mono"><i data-lucide="alert-triangle" className="w-3 h-3 inline"></i> Обнаружено гравитационное искажение в районе "Агропром"</p></div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className={`lg:col-span-2 ${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder'} border rounded-md p-5`}><h3 className="font-mono font-bold text-zoneAccent mb-4 text-sm"><i data-lucide="clipboard-list" className="inline w-4 h-4 mr-2"></i> АКТИВНЫЕ ЗАДАНИЯ</h3><ul className="space-y-3"><li className="flex justify-between items-center border-b border-zoneBorder/30 pb-2 text-sm"><span>🔴 Найти артефакт "Кристалл"</span><span className="text-zoneRadio text-xs">+3500 RU</span></li><li className="flex justify-between items-center border-b border-zoneBorder/30 pb-2 text-sm"><span>⚡ Зачистить ренегатов</span><span className="text-zoneRadio text-xs">+репутация</span></li><li className="flex justify-between items-center text-sm"><span>🌀 Исследовать аномалию "Воронка"</span><span className="text-zoneRadio text-xs">артефакт</span></li></ul></div><div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder'} border rounded-md p-5`}><h3 className="font-mono font-bold text-zoneAccent mb-3 text-sm"><i data-lucide="users" className="inline w-4 h-4 mr-2"></i> ОНЛАЙН СТАЛКЕРЫ</h3><div className="space-y-2">{["Меченый", "Шрам", "Фантом", "Доктор", "Клещ"].map((name, i) => (<div key={i} className="flex justify-between items-center text-xs border-b border-zoneBorder/30 pb-1.5"><span className="font-mono">{name}</span><span className="text-emerald-500 text-[10px]">● в зоне</span></div>))}</div></div></div>
+                <div className={`mt-6 ${isDark ? 'bg-black/40 border-zoneBorder/50' : 'bg-stone-100 border-stone-200'} border rounded-md p-4`}><div className="flex items-center gap-2 text-zoneAccent text-[11px] font-mono mb-2"><i data-lucide="scroll-text" className="w-3 h-3"></i> ЖУРНАЛ СОБЫТИЙ</div><div className="space-y-1 text-[10px] font-mono text-stone-400"><p>&gt; [14:23:17] Сталкер "Шрам" обнаружил аномалию</p><p>&gt; [13:58:02] Выброс мутантов возле Кордона</p><p>&gt; [13:12:44] Артефакт "Медуза" изъят</p></div></div>
+            </main>
+        );
+    };
+    
+    const SquadPanel = ({ isDark }) => {
+        const factions = [
+            { name: "ДОЛГ", icon: "shield", color: "border-blue-700", bg: "bg-blue-950/30", reputation: "Нейтральная", danger: "Высокая", weapons: "ВСС Винторез, ПБ, экзоскелеты", leader: "Генерал Крылов", desc: "Военизированная группировка, очищающая Зону от мутантов" },
+            { name: "СВОБОДА", icon: "flag", color: "border-green-700", bg: "bg-green-950/30", reputation: "Дружественная", danger: "Средняя", weapons: "TRs-301, GP-37, лёгкая броня", leader: "Лукаш", desc: "Анархисты, выступающие за свободный доступ в Зону" },
+            { name: "МОНОЛИТ", icon: "crystal", color: "border-purple-700", bg: "bg-purple-950/30", reputation: "Враждебная", danger: "Критическая", weapons: "Gauss-пушка, экзоскелеты, ПДА", leader: "Монолит (Высший разум)", desc: "Зомбированные фанатики, защищающие центр Зоны" },
+            { name: "НАЁМНИКИ", icon: "target", color: "border-orange-700", bg: "bg-orange-950/30", reputation: "Враждебная", danger: "Высокая", weapons: "FN F2000, снайперские винтовки", leader: "Хог", desc: "Профессиональные солдаты удачи" },
+            { name: "БАНДИТЫ", icon: "skull", color: "border-red-700", bg: "bg-red-950/30", reputation: "Враждебная", danger: "Средняя", weapons: "Обрезы, MP5, дробовики", leader: "Борода", desc: "Криминальные элементы, промышляющие грабежами" },
+            { name: "УЧЁНЫЕ", icon: "flask-conical", color: "border-cyan-700", bg: "bg-cyan-950/30", reputation: "Дружественная", danger: "Низкая", weapons: "Пистолеты, защитные костюмы SEVA", leader: "Профессор Сахаров", desc: "Исследователи Зоны, платят за артефакты" }
+        ];
+        return (
+            <main className={`ml-72 flex-1 p-6 md:p-8 ${isDark ? 'text-stone-200' : 'text-stone-800'}`}>
+                <div className="mb-8 pb-4 border-b border-zoneBorder/50"><div className="flex items-center gap-2 text-zoneAccent font-mono text-[11px]"><i data-lucide="users" className="w-3 h-3"></i> ГРУППИРОВКИ ЗОНЫ</div><h1 className="text-2xl md:text-3xl font-black tracking-tighter mt-1 font-mono">[ФРАКЦИИ И СОЮЗЫ]</h1><p className="text-stone-400 text-xs mt-2">Репутация, вооружение и лидеры группировок</p></div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {factions.map((f, idx) => (
+                        <div key={idx} className={`faction-card ${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg overflow-hidden`}>
+                            <div className={`p-5 ${f.bg} border-b ${f.color} border-t-4 ${f.color.replace('border', 'border-t')}`}>
+                                <div className="flex justify-between items-start"><div className="flex items-center gap-3"><i data-lucide={f.icon} className={`w-8 h-8 ${isDark ? 'text-zoneAccent' : 'text-amber-600'}`}></i><div><h2 className="text-xl font-black font-mono">{f.name}</h2><p className="text-[10px] text-stone-400">{f.desc}</p></div></div><div className="text-right"><div className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${f.reputation === 'Дружественная' ? 'bg-emerald-500/20 text-emerald-400' : f.reputation === 'Нейтральная' ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>{f.reputation}</div><div className={`text-[9px] font-mono mt-1 ${f.danger === 'Критическая' ? 'text-red-500 animate-pulse' : f.danger === 'Высокая' ? 'text-orange-500' : 'text-stone-400'}`}>опасность: {f.danger}</div></div></div>
+                            </div>
+                            <div className="p-5 space-y-3"><div className="grid grid-cols-2 gap-3 text-xs"><div><p className="text-[9px] font-mono text-zoneAccent">Лидер</p><p className="font-bold text-sm">{f.leader}</p></div><div><p className="text-[9px] font-mono text-zoneAccent">Вооружение</p><p className="text-xs">{f.weapons}</p></div></div><div className="pt-2 border-t border-zoneBorder/40"><div className="flex justify-between items-center text-[10px]"><span className="text-stone-400">Влияние в Зоне</span><div className="w-32 bg-stone-800 h-1.5 rounded-full"><div className={`h-full rounded-full ${f.name === 'МОНОЛИТ' ? 'w-3/4 bg-purple-600' : f.name === 'ДОЛГ' ? 'w-2/3 bg-blue-600' : f.name === 'СВОБОДА' ? 'w-1/2 bg-green-600' : 'w-2/5 bg-stone-500'}`}></div></div></div></div></div>
+                        </div>
+                    ))}
+                </div>
+                <div className={`mt-8 ${isDark ? 'bg-black/40 border-zoneBorder/50' : 'bg-stone-100 border-stone-200'} border rounded-md p-4`}><div className="flex items-center gap-2 text-zoneAccent text-[11px] font-mono mb-3"><i data-lucide="radio-tower" className="w-3 h-3"></i> СТАТУС ОТНОШЕНИЙ</div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-mono"><div className="flex items-center gap-2"><span className="w-2 h-2 bg-emerald-500 rounded-full"></span><span>Дружественные: Свобода, Учёные</span></div><div className="flex items-center gap-2"><span className="w-2 h-2 bg-amber-500 rounded-full"></span><span>Нейтральные: Долг</span></div><div className="flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full"></span><span>Враждебные: Монолит, Наёмники, Бандиты</span></div></div></div>
+            </main>
+        );
+    };
+    
+    const ArtifactsPanel = ({ isDark }) => {
+        const artifacts = [
+            { name: "КОМПАС", rarity: "Легендарный", effect: "Указывает путь к безопасным зонам", location: "Припять", radiation: "+15%", value: "50000 RU", icon: "compass", color: "border-purple-500" },
+            { name: "КАМЕНЬ СЕРДЦА", rarity: "Редкий", effect: "Регенерация здоровья +20%", location: "Янтарь", radiation: "+8%", value: "25000 RU", icon: "heart", color: "border-red-500" },
+            { name: "КРИСТАЛЛ", rarity: "Редкий", effect: "Повышает выносливость на 30%", location: "Тёмная долина", radiation: "+12%", value: "22000 RU", icon: "crystal", color: "border-cyan-500" },
+            { name: "МЕДУЗА", rarity: "Обычный", effect: "Снижает радиацию на -15%", location: "Кордон", radiation: "+5%", value: "8000 RU", icon: "droplet", color: "border-blue-500" },
+            { name: "КОЛЮЧКА", rarity: "Обычный", effect: "Защита от химических атак", location: "Свалка", radiation: "+7%", value: "6000 RU", icon: "shield", color: "border-green-500" },
+            { name: "НОЧНАЯ ЗВЕЗДА", rarity: "Легендарный", effect: "Увеличивает ночное зрение", location: "Радар", radiation: "+20%", value: "45000 RU", icon: "moon", color: "border-indigo-500" },
+            { name: "КРОВЬ КАМНЯ", rarity: "Эпический", effect: "Временно удваивает урон", location: "Агропром", radiation: "+25%", value: "35000 RU", icon: "droplets", color: "border-red-700" },
+            { name: "ЗОЛОТАЯ РЫБКА", rarity: "Мифический", effect: "Увеличивает удачу и шанс найти артефакты", location: "Припять", radiation: "+10%", value: "100000 RU", icon: "fish", color: "border-amber-500" }
+        ];
+        
+        return (
+            <main className={`ml-72 flex-1 p-6 md:p-8 ${isDark ? 'text-stone-200' : 'text-stone-800'}`}>
+                <div className="mb-8 pb-4 border-b border-zoneBorder/50">
+                    <div className="flex items-center gap-2 text-zoneAccent font-mono text-[11px]"><i data-lucide="gem" className="w-3 h-3"></i> КАТАЛОГ АРТЕФАКТОВ ЗОНЫ</div>
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter mt-1 font-mono">[РЕЛИКВИИ АНОМАЛИЙ]</h1>
+                    <p className="text-stone-400 text-xs mt-2">Свойства, редкость, места находок и рыночная стоимость</p>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {artifacts.map((art, idx) => (
+                        <div key={idx} className={`artifact-card ${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg overflow-hidden hover:shadow-xl transition-all`}>
+                            <div className={`p-4 border-l-8 ${art.color} ${isDark ? 'bg-gradient-to-r from-zoneCard to-transparent' : 'bg-gradient-to-r from-stone-50 to-transparent'}`}>
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-3"><i data-lucide={art.icon} className={`w-10 h-10 ${isDark ? 'text-zoneAccent' : 'text-amber-600'}`}></i><div><h2 className="text-xl font-black font-mono tracking-wide">{art.name}</h2><div className="flex gap-2 mt-1"><span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${art.rarity === 'Легендарный' ? 'bg-purple-500/20 text-purple-400' : art.rarity === 'Мифический' ? 'bg-amber-500/20 text-amber-400' : art.rarity === 'Эпический' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>{art.rarity}</span><span className="text-[9px] font-mono text-stone-400">☢ {art.radiation}</span></div></div></div>
+                                    <div className="text-right"><p className="text-xs font-bold text-zoneRadio">{art.value}</p><p className="text-[9px] text-stone-400 mt-1"><i data-lucide="map-pin" className="w-3 h-3 inline"></i> {art.location}</p></div>
+                                </div>
+                            </div>
+                            <div className="p-4"><p className="text-sm font-mono">{art.effect}</p><div className="mt-3 pt-2 border-t border-zoneBorder/40 flex justify-between items-center text-[10px] text-stone-400"><span><i data-lucide="shield" className="w-3 h-3 inline"></i> Радиоактивность: активна</span><span><i data-lucide="dollar-sign" className="w-3 h-3 inline"></i> Спрос: {art.rarity === 'Мифический' ? 'Экстремальный' : art.rarity === 'Легендарный' ? 'Высокий' : 'Средний'}</span></div></div>
+                        </div>
+                    ))}
+                </div>
+                <div className={`mt-8 ${isDark ? 'bg-black/40 border-zoneBorder/50' : 'bg-stone-100 border-stone-200'} border rounded-md p-4`}><div className="flex items-center gap-2 text-zoneAccent text-[11px] font-mono mb-3"><i data-lucide="flask-conical" className="w-3 h-3"></i> ИНФОРМАЦИЯ ОБ АРТЕФАКТАХ</div><div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[10px] font-mono"><div className="flex items-start gap-2"><span className="text-zoneAccent">•</span><span>Артефакты появляются после выбросов в аномальных зонах</span></div><div className="flex items-start gap-2"><span className="text-zoneAccent">•</span><span>Радиационный фон артефактов требует специальной защиты</span></div><div className="flex items-start gap-2"><span className="text-zoneAccent">•</span><span>Учёные платят больше всех за редкие экземпляры</span></div></div></div>
+            </main>
+        );
+    };
+    
+    const EmissionsPanel = ({ isDark }) => {
+        const [emissionData, setEmissionData] = useState({
+            lastEmission: "26.03.2025 14:23:17",
+            nextEmission: "26.03.2025 22:15:00",
+            stalkersDead: 347,
+            artifactsFound: 1256,
+            newAnomalies: 89,
+            totalEmissions: 43
+        });
+        
+        useEffect(() => {
+            const interval = setInterval(() => {
+                setEmissionData(prev => ({
+                    ...prev,
+                    stalkersDead: prev.stalkersDead + Math.floor(Math.random() * 3),
+                    artifactsFound: prev.artifactsFound + Math.floor(Math.random() * 8),
+                    newAnomalies: prev.newAnomalies + Math.floor(Math.random() * 2)
+                }));
+            }, 8000);
+            return () => clearInterval(interval);
+        }, []);
+        
+        const emissionHistory = [
+            { date: "24.03.2025", time: "03:17:42", power: "Критический", dead: 28, artifacts: 94, anomalies: 7 },
+            { date: "21.03.2025", time: "19:43:11", power: "Высокий", dead: 19, artifacts: 76, anomalies: 5 },
+            { date: "18.03.2025", time: "08:22:05", power: "Средний", dead: 12, artifacts: 58, anomalies: 4 },
+            { date: "15.03.2025", time: "23:58:33", power: "Критический", dead: 34, artifacts: 112, anomalies: 9 },
+            { date: "12.03.2025", time: "16:10:22", power: "Высокий", dead: 21, artifacts: 83, anomalies: 6 },
+        ];
+        
+        return (
+            <main className={`ml-72 flex-1 p-6 md:p-8 ${isDark ? 'text-stone-200' : 'text-stone-800'}`}>
+                <div className="mb-8 pb-4 border-b border-zoneBorder/50">
+                    <div className="flex items-center gap-2 text-zoneAccent font-mono text-[11px]">
+                        <i data-lucide="radiation" className="w-3 h-3"></i> АРХИВ ВЫБРОСОВ И СТАТИСТИКА
+                    </div>
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter mt-1 font-mono">[ДАННЫЕ ЭКОЛОГОВ]</h1>
+                    <p className="text-stone-400 text-xs mt-2">Даты выбросов, потери сталкеров, найденные артефакты и новые аномалии</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5 text-center relative overflow-hidden`}>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-red-600/10 rounded-full blur-2xl"></div>
+                        <i data-lucide="calendar" className="w-8 h-8 text-red-500 mx-auto mb-2"></i>
+                        <p className="text-[10px] font-mono text-zoneAccent">ПОСЛЕДНИЙ ВЫБРОС</p>
+                        <p className="text-lg font-black font-mono mt-1">{emissionData.lastEmission}</p>
+                    </div>
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5 text-center relative overflow-hidden`}>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-amber-600/10 rounded-full blur-2xl"></div>
+                        <i data-lucide="clock" className="w-8 h-8 text-amber-500 mx-auto mb-2"></i>
+                        <p className="text-[10px] font-mono text-zoneAccent">СЛЕДУЮЩИЙ ВЫБРОС</p>
+                        <p className="text-lg font-black font-mono mt-1">{emissionData.nextEmission}</p>
+                        <p className="text-[9px] text-red-400 animate-pulse mt-1">ОПАСНОСТЬ ВЫСОКА</p>
+                    </div>
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5 text-center`}>
+                        <i data-lucide="skull" className="w-8 h-8 text-red-500 mx-auto mb-2"></i>
+                        <p className="text-[10px] font-mono text-zoneAccent">ПОГИБЛО СТАЛКЕРОВ</p>
+                        <p className="text-3xl font-black font-mono stat-number text-red-500">{emissionData.stalkersDead}</p>
+                        <p className="text-[8px] text-stone-400 mt-1">за всё время</p>
+                    </div>
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5 text-center`}>
+                        <i data-lucide="gem" className="w-8 h-8 text-amber-500 mx-auto mb-2"></i>
+                        <p className="text-[10px] font-mono text-zoneAccent">НАЙДЕНО АРТЕФАКТОВ</p>
+                        <p className="text-3xl font-black font-mono stat-number text-amber-500">{emissionData.artifactsFound}</p>
+                        <p className="text-[8px] text-stone-400 mt-1">после выбросов</p>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5`}>
+                        <div className="flex items-center gap-2 mb-4"><i data-lucide="zap" className="w-5 h-5 text-zoneAccent"></i><h3 className="font-mono font-bold text-zoneAccent text-sm">НОВЫЕ АНОМАЛИИ</h3></div>
+                        <p className="text-4xl font-black font-mono text-zoneRadio text-center">{emissionData.newAnomalies}</p>
+                        <p className="text-center text-[10px] text-stone-400 mt-2">зарегистрировано после последнего выброса</p>
+                        <div className="mt-4 pt-3 border-t border-zoneBorder/40"><p className="text-[10px] font-mono text-stone-400">Всего активных аномалий в Зоне: <span className="text-zoneAccent font-bold">187</span></p></div>
+                    </div>
+                    <div className={`${isDark ? 'bg-zoneCard/80 border-zoneBorder' : 'bg-lightCard border-lightBorder shadow-sm'} border rounded-lg p-5`}>
+                        <div className="flex items-center gap-2 mb-4"><i data-lucide="bar-chart-3" className="w-5 h-5 text-zoneAccent"></i><h3 className="font-mono font-bold text-zoneAccent text-sm">СТАТИСТИКА ВЫБРОСОВ</h3></div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs"><span>Всего выбросов:</span><span className="font-bold font-mono">{emissionData.totalEmissions}</span></div>
+                            <div className="flex justify-between text-xs"><span>Средняя мощность:</span><span className="font-bold text-orange-500">Высокая</span></div>
+                            <div className="flex justify-between text-xs"><span>Среднее число жертв:</span><span className="font-bold text-red-500">8.1</span></div>
+                            <div className="flex justify-between text-xs"><span>Артефактов в среднем:</span><span className="font-bold text-amber-500">29.2</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className={`${isDark ? 'bg-black/40 border-zoneBorder/50' : 'bg-stone-100 border-stone-200'} border rounded-md p-5`}>
+                    <div className="flex items-center gap-2 text-zoneAccent text-[11px] font-mono mb-4">
+                        <i data-lucide="history" className="w-3 h-3"></i> ИСТОРИЯ ВЫБРОСОВ (ПОСЛЕДНИЕ 5)
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-[11px] font-mono">
+                            <thead className={`border-b ${isDark ? 'border-zoneBorder' : 'border-stone-300'}`}>
+                                <tr className="text-left text-zoneAccent">
+                                    <th className="pb-2">ДАТА</th><th className="pb-2">ВРЕМЯ</th><th className="pb-2">МОЩНОСТЬ</th><th className="pb-2">ПОГИБЛО</th><th className="pb-2">АРТЕФАКТЫ</th><th className="pb-2">НОВЫЕ АНОМАЛИИ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {emissionHistory.map((em, idx) => (
+                                    <tr key={idx} className={`border-b ${isDark ? 'border-zoneBorder/30' : 'border-stone-200'}`}>
+                                        <td className="py-2">{em.date}</td><td>{em.time}</td>
+                                        <td className={`${em.power === 'Критический' ? 'text-red-500 font-bold' : em.power === 'Высокий' ? 'text-orange-500' : 'text-yellow-500'}`}>{em.power}</td>
+                                        <td className="text-red-400">{em.dead}</td><td className="text-amber-400">{em.artifacts}</td><td className="text-orange-400">{em.anomalies}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-zoneBorder/40 text-[9px] text-stone-400 font-mono text-center">
+                        <i data-lucide="alert-triangle" className="w-3 h-3 inline"></i> Данные предоставлены группировкой "Учёные" • Последнее обновление: {new Date().toLocaleString()}
+                    </div>
+                </div>
+            </main>
+        );
+    };
+    
+    const StalkerCursor = () => {
+        const [pos, setPos] = useState({ x: 0, y: 0 });
+        const [hover, setHover] = useState(false);
+        const [click, setClick] = useState(false);
+        useEffect(() => {
+            const move = (e) => setPos({ x: e.clientX, y: e.clientY });
+            const over = (e) => { const t = e.target.closest('button, .location-card, a, .artifact-card, .faction-card'); setHover(!!t); };
+            const down = () => { setClick(true); setTimeout(() => setClick(false), 120); };
+            window.addEventListener('mousemove', move);
+            window.addEventListener('mouseover', over);
+            window.addEventListener('mousedown', down);
+            return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseover', over); window.removeEventListener('mousedown', down); };
+        }, []);
+        return (<div className={`custom-cursor ${hover ? 'hover-effect' : ''} ${click ? 'click-effect' : ''}`} style={{ left: pos.x, top: pos.y }}><svg viewBox="0 0 24 24" fill="none"><path d="M5.5 3L19.5 12L12.5 13.5L10.5 20.5L5.5 3Z" fill="#8b5a2b" stroke="#e6b422" strokeWidth="1.2"/><path d="M5.5 3L12.5 13.5L19.5 12L12.5 13.5L10.5 20.5L5.5 3Z" fill="#b87c3a" stroke="#ffd966" strokeWidth="0.8"/><circle cx="9.5" cy="8.5" r="1.2" fill="#ff5500"/><path d="M14 11L16 12.5" stroke="#ffaa66" strokeWidth="1"/><path d="M12 15L13 17" stroke="#ffaa66" strokeWidth="1"/></svg></div>);
+    };
+    
+    const App = () => {
+        const [activeTab, setActiveTab] = useState('zone');
+        const [isDark, setIsDark] = useState(true);
+        
+        useEffect(() => {
+            const saved = localStorage.getItem('stalker_theme');
+            if (saved === 'light') setIsDark(false);
+            else if (saved === 'dark') setIsDark(true);
+            else setIsDark(true);
+        }, []);
+        
+        useEffect(() => {
+            document.documentElement.classList.toggle('dark', isDark);
+            localStorage.setItem('stalker_theme', isDark ? 'dark' : 'light');
+        }, [isDark]);
+        
+        useEffect(() => {
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                setTimeout(() => lucide.createIcons(), 100);
+            }
+        }, [activeTab, isDark]);
+        
+        const toggleTheme = () => setIsDark(prev => !prev);
+        
+        return (
+            <div className={`min-h-screen transition-colors duration-300 ${isDark ? 'bg-zone text-stone-200' : 'bg-lightBg text-stone-800'}`}>
+                <div className="noise-bg fixed inset-0 pointer-events-none opacity-20 z-10"></div>
+                <div className="crt-effect"></div>
+                
+                <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} isDark={isDark} />
+                
+                <div className="fixed top-5 right-5 z-30">
+                    <ThemeToggle isDark={isDark} toggleTheme={toggleTheme} />
+                </div>
+                
+                {activeTab === 'zone' && <ZoneDashboard isDark={isDark} />}
+                {activeTab === 'squad' && <SquadPanel isDark={isDark} />}
+                {activeTab === 'artifacts' && <ArtifactsPanel isDark={isDark} />}
+                {activeTab === 'emissions' && <EmissionsPanel isDark={isDark} />}
+                
+                <GeigerBeep isDark={isDark} />
+                <StalkerCursor />
+                
+                <div className={`fixed bottom-3 right-4 z-40 text-[7px] font-mono ${isDark ? 'text-stone-600' : 'text-stone-400'}`}>
+                    S.T.A.L.K.E.R. SHADOW OF CHERNOBYL // ZONE CONTROL v2.0
+                </div>
+            </div>
+        );
+    };
+    
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+</script>
+</body>
+</html>
